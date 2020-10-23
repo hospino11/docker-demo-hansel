@@ -1,0 +1,31 @@
+stages:
+  - build
+  - release
+
+build_image:
+  only:
+    - master
+  image: registry.gitlab.com/majorhayden/container-buildah
+  stage: build
+  variables:
+    STORAGE_DRIVER: "vfs"
+    BUILDAH_FORMAT: "docker"
+  before_script:
+    - dnf install -y nodejs
+    - curl https://cli-assets.heroku.com/install.sh | sh
+    - sed -i '/^mountopt =.*/d' /etc/containers/storage.conf
+  script:
+    - ./gradlew build
+    - buildah bud --iidfile iidfile -t cd-alediaferia:$CI_COMMIT_SHORT_SHA .
+    - buildah push --creds=_:$(heroku auth:token) $(cat iidfile) registry.heroku.com/cd-alediaferia/web
+
+release:
+  only:
+    - master
+  image: node:10.17-alpine
+  stage: release
+  before_script:
+    - apk add curl bash
+    - curl https://cli-assets.heroku.com/install.sh | sh
+  script:
+    - heroku container:release -a cd-alediaferia web
